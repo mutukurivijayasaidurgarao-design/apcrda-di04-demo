@@ -1,0 +1,701 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>APCRDA DI-04 Manual Demo</title>
+
+<style>
+body {
+    font: 15px Arial;
+    margin: 0;
+    background: #f4f7fa;
+    color: #182633;
+}
+
+header {
+    background: #17324d;
+    color: white;
+    padding: 20px;
+}
+
+main {
+    max-width: 1000px;
+    margin: 20px auto;
+    padding: 0 14px;
+}
+
+.tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.panel {
+    background: white;
+    border: 1px solid #d5e0e9;
+    border-radius: 10px;
+    padding: 18px;
+    margin: 14px 0;
+}
+
+button {
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 6px;
+    background: #2364aa;
+    color: white;
+    cursor: pointer;
+    margin: 4px;
+}
+
+input, select, textarea {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #bac8d5;
+    border-radius: 6px;
+    margin: 5px 0 12px;
+    box-sizing: border-box;
+}
+
+textarea {
+    min-height: 90px;
+}
+
+.hidden {
+    display: none;
+}
+
+.item {
+    border: 1px solid #d5e0e9;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 10px 0;
+}
+
+.item img {
+    max-width: 220px;
+    max-height: 140px;
+    display: block;
+    margin: 8px;
+}
+
+.muted {
+    color: #637383;
+    font-size: 13px;
+}
+
+.tag {
+    background: #e8eff6;
+    border-radius: 20px;
+    padding: 3px 8px;
+    font-size: 12px;
+}
+
+.good {
+    background: #247a4b;
+}
+
+.note {
+    background: #edf5fc;
+    padding: 12px;
+    border-left: 4px solid #2364aa;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>APCRDA DI-04 — Manual Grievance Workflow</h1>
+    <div>Working browser demo • No AI / ML</div>
+</header>
+
+<main>
+
+<div class="note">
+    <b>Demo limitations:</b>
+    This prototype stores records in this browser only.
+    Login is represented by contact capture; OTP is not implemented.
+    Email/SMS is simulated on screen and no real message is sent.
+    Do not enter real sensitive citizen data.
+</div>
+
+<div class="tabs">
+    <button onclick="show('public')">Public</button>
+    <button onclick="show('office')">Main Office</button>
+    <button onclick="show('dept')">Department</button>
+    <button onclick="show('track')">Track</button>
+</div>
+
+<!-- PUBLIC SECTION -->
+
+<section id="public" class="panel">
+
+<h2>Public registration and complaint submission</h2>
+
+<form id="form">
+
+    <label>Full name</label>
+    <input id="name" required>
+
+    <label>Email or mobile number</label>
+    <input id="contact" required>
+
+    <label>Select department you believe is responsible</label>
+
+    <select id="deptChoice" required>
+        <option value="">Choose</option>
+        <option>Revenue</option>
+        <option>Roads & Engineering</option>
+        <option>Traffic</option>
+        <option>Water Supply</option>
+        <option>Electrical / Streetlights</option>
+        <option>Sanitation</option>
+        <option>Drainage & Sewerage</option>
+        <option>Other</option>
+    </select>
+
+    <label>Photograph of the issue</label>
+    <input id="before" type="file" accept="image/*">
+
+    <label>
+        Describe the issue, when it started,
+        and the difficulties caused
+    </label>
+    <textarea id="desc" required></textarea>
+
+    <label>Location / address / landmark</label>
+    <input id="loc" required>
+
+    <label>GPS coordinates (optional)</label>
+    <input id="gps"
+           placeholder="Latitude, longitude or leave blank">
+
+    <button type="button" onclick="getGPS()">
+        Use my GPS
+    </button>
+
+    <button type="submit">
+        Submit to Main Office
+    </button>
+
+</form>
+
+<div id="receipt"></div>
+
+</section>
+
+<!-- MAIN OFFICE SECTION -->
+
+<section id="office" class="panel hidden">
+
+    <h2>Main Office — verify and forward</h2>
+    <div id="officeList"></div>
+
+</section>
+
+<!-- DEPARTMENT SECTION -->
+
+<section id="dept" class="panel hidden">
+
+    <h2>Concerned Department — resolve issue</h2>
+    <div id="deptList"></div>
+
+</section>
+
+<!-- TRACKING SECTION -->
+
+<section id="track" class="panel hidden">
+
+    <h2>Track complaint</h2>
+
+    <label>Complaint ID or registered contact</label>
+    <input id="query">
+
+    <button onclick="track()">Search</button>
+
+    <div id="trackResult"></div>
+
+</section>
+
+<!-- WORKFLOW DESCRIPTION -->
+
+<section class="panel">
+
+    <h3>Workflow</h3>
+
+    <p>
+        Public registers/signs in → selects department →
+        uploads issue photo → describes issue/duration/impact →
+        provides GPS or manual location → submits →
+        Main Office verifies and corrects department if required →
+        department resolves and uploads after-photo →
+        Main Office verifies and closes →
+        citizen receives appreciation message.
+    </p>
+
+</section>
+
+</main>
+
+<script>
+
+// ======================================
+// STORAGE AND INITIALIZATION
+// ======================================
+
+const KEY = 'apcrda_manual_demo';
+
+let data = JSON.parse(localStorage.getItem(KEY) || '[]');
+
+const $ = x => document.getElementById(x);
+
+function save() {
+    localStorage.setItem(KEY, JSON.stringify(data));
+}
+
+// ======================================
+// HTML ESCAPING
+// ======================================
+
+function esc(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[c]));
+}
+
+// ======================================
+// NAVIGATION
+// ======================================
+
+function show(id) {
+    ['public', 'office', 'dept', 'track'].forEach(x =>
+        $(x).classList.toggle('hidden', x !== id)
+    );
+
+    render();
+}
+
+// ======================================
+// IMAGE UPLOAD
+// ======================================
+
+function readFile(f) {
+    return new Promise(ok => {
+
+        if (!f) return ok('');
+
+        let r = new FileReader();
+
+        r.onload = () => ok(r.result);
+
+        r.readAsDataURL(f);
+
+    });
+}
+
+function photo(src) {
+    return src ? '<img src="' + src + '">' : '';
+}
+
+// ======================================
+// COMPLAINT HISTORY
+// ======================================
+
+function history(r, s) {
+    r.history.push(new Date().toLocaleString() + ' — ' + s);
+}
+
+// ======================================
+// GPS LOCATION
+// ======================================
+
+function getGPS() {
+
+    if (!navigator.geolocation) {
+        alert('GPS unavailable. Enter location manually.');
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+
+        p => {
+            $('gps').value =
+                p.coords.latitude + ', ' + p.coords.longitude;
+        },
+
+        () => alert(
+            'GPS permission unavailable. Enter location manually.'
+        )
+
+    );
+}
+
+// ======================================
+// PUBLIC COMPLAINT SUBMISSION
+// ======================================
+
+$('form').onsubmit = async e => {
+
+    e.preventDefault();
+
+    let f = $('before').files[0];
+
+    let r = {
+
+        id: 'GRV-' + new Date().getFullYear() +
+            '-' + Date.now().toString().slice(-6),
+
+        name: $('name').value,
+
+        contact: $('contact').value,
+
+        chosen: $('deptChoice').value,
+
+        dept: $('deptChoice').value,
+
+        desc: $('desc').value,
+
+        loc: $('loc').value,
+
+        gps: $('gps').value,
+
+        before: await readFile(f),
+
+        status: 'Submitted to Main Office',
+
+        history: []
+
+    };
+
+    history(r, 'Public submitted complaint');
+
+    data.unshift(r);
+
+    save();
+
+    $('receipt').innerHTML =
+        '<p class="note">Submitted successfully. ' +
+        'Your complaint ID: <b>' + r.id + '</b></p>';
+
+    e.target.reset();
+
+    render();
+
+};
+
+// ======================================
+// RENDER ALL WORKFLOW SECTIONS
+// ======================================
+
+function render() {
+
+    // MAIN OFFICE COMPLAINT LIST
+
+    $('officeList').innerHTML = data.map(r =>
+
+        '<div class="item">' +
+
+        '<b>' + esc(r.id) + '</b> ' +
+
+        '<span class="tag">' +
+        esc(r.status) +
+        '</span>' +
+
+        '<p>Citizen: ' +
+        esc(r.name) +
+        ' | Contact: ' +
+        esc(r.contact) +
+        '</p>' +
+
+        '<p>Selected department: ' +
+        esc(r.chosen) +
+        ' | Current: ' +
+        esc(r.dept) +
+        '</p>' +
+
+        '<p>' + esc(r.desc) + '</p>' +
+
+        '<p>Location: ' +
+        esc(r.loc) + ' ' +
+        esc(r.gps) +
+        '</p>' +
+
+        photo(r.before) +
+
+        (
+            r.status === 'Submitted to Main Office'
+
+            ?
+
+            '<label>Confirm or correct department</label>' +
+
+            '<select id="fix-' + r.id + '">' +
+
+            [
+                'Revenue',
+                'Roads & Engineering',
+                'Traffic',
+                'Water Supply',
+                'Electrical / Streetlights',
+                'Sanitation',
+                'Drainage & Sewerage',
+                'Other'
+            ].map(d =>
+                '<option ' +
+                (d === r.dept ? 'selected' : '') +
+                '>' + d + '</option>'
+            ).join('') +
+
+            '</select>' +
+
+            '<button onclick="forward(\'' + r.id + '\')">' +
+            'Verify and forward</button>'
+
+            : ''
+
+        ) +
+
+        '<p class="muted">' +
+        r.history.map(esc).join('<br>') +
+        '</p>' +
+
+        '</div>'
+
+    ).join('') || 'No complaints yet.';
+
+
+    // DEPARTMENT COMPLAINT LIST
+
+    let ds = data.filter(r =>
+        ['Forwarded to Department', 'Work in Progress']
+            .includes(r.status)
+    );
+
+    $('deptList').innerHTML = ds.map(r =>
+
+        '<div class="item">' +
+
+        '<b>' + esc(r.id) + '</b> — ' +
+        esc(r.dept) +
+
+        '<p>' + esc(r.desc) + '</p>' +
+
+        '<p>' + esc(r.loc) + '</p>' +
+
+        photo(r.before) +
+
+        '<label>Work completion remarks</label>' +
+
+        '<textarea id="remark-' + r.id + '"></textarea>' +
+
+        '<label>Photograph after resolving issue</label>' +
+
+        '<input type="file" id="after-' + r.id +
+        '" accept="image/*">' +
+
+        '<button onclick="progress(\'' + r.id + '\')">' +
+        'Mark work in progress</button>' +
+
+        '<button onclick="resolve(\'' + r.id + '\')">' +
+        'Submit resolution to Main Office</button>' +
+
+        '</div>'
+
+    ).join('') || 'No forwarded complaints awaiting work.';
+
+
+    // RESOLUTION VERIFICATION
+
+    let pending = data.filter(r =>
+        r.status === 'Resolution submitted to Main Office'
+    );
+
+    $('officeList').innerHTML += pending.map(r =>
+
+        '<div class="item">' +
+
+        '<h3>Resolution verification: ' +
+        esc(r.id) +
+        '</h3>' +
+
+        '<p>' + esc(r.remark) + '</p>' +
+
+        photo(r.after) +
+
+        '<button class="good" onclick="closeCase(\'' +
+        r.id + '\')">' +
+
+        'Verify, close and notify citizen' +
+
+        '</button>' +
+
+        '</div>'
+
+    ).join('');
+
+}
+
+// ======================================
+// MAIN OFFICE: VERIFY AND FORWARD
+// ======================================
+
+window.forward = id => {
+
+    let r = data.find(x => x.id === id);
+
+    r.dept = $('fix-' + id).value;
+
+    r.status = 'Forwarded to Department';
+
+    history(
+        r,
+        'Main Office verified details and forwarded to ' + r.dept
+    );
+
+    save();
+
+    render();
+
+};
+
+// ======================================
+// DEPARTMENT: WORK IN PROGRESS
+// ======================================
+
+window.progress = id => {
+
+    let r = data.find(x => x.id === id);
+
+    r.status = 'Work in Progress';
+
+    history(r, 'Department started work');
+
+    save();
+
+    render();
+
+};
+
+// ======================================
+// DEPARTMENT: SUBMIT RESOLUTION
+// ======================================
+
+window.resolve = async id => {
+
+    let r = data.find(x => x.id === id);
+
+    let f = $('after-' + id).files[0];
+
+    if (!f) {
+        alert('Upload the resolved-issue photograph first.');
+        return;
+    }
+
+    r.after = await readFile(f);
+
+    r.remark = $('remark-' + id).value;
+
+    r.status = 'Resolution submitted to Main Office';
+
+    history(
+        r,
+        'Department submitted after-photo and remarks'
+    );
+
+    save();
+
+    render();
+
+};
+
+// ======================================
+// MAIN OFFICE: CLOSE COMPLAINT
+// ======================================
+
+window.closeCase = id => {
+
+    let r = data.find(x => x.id === id);
+
+    r.status = 'Closed';
+
+    history(
+        r,
+        'Main Office verified resolution and closed complaint'
+    );
+
+    r.message =
+        'Dear ' + r.name +
+        ', thank you for bringing complaint ' +
+        r.id +
+        ' to our attention. The concerned department has resolved ' +
+        'the reported issue and the Main Office has verified ' +
+        'the resolution. We appreciate your contribution to ' +
+        'improving public services. — APCRDA';
+
+    save();
+
+    render();
+
+    alert(
+        'DEMO MESSAGE (not actually sent):\n\n' +
+        r.message
+    );
+
+};
+
+// ======================================
+// TRACK COMPLAINT
+// ======================================
+
+window.track = () => {
+
+    let q = $('query').value.toLowerCase().trim();
+
+    let found = data.filter(r =>
+        r.id.toLowerCase() === q ||
+        r.contact.toLowerCase() === q
+    );
+
+    $('trackResult').innerHTML = found.map(r =>
+
+        '<div class="item">' +
+
+        '<b>' + esc(r.id) + '</b> — ' +
+        esc(r.status) +
+
+        '<p>' + esc(r.dept) +
+        ' | ' + esc(r.loc) +
+        '</p>' +
+
+        '<p>' + esc(r.desc) + '</p>' +
+
+        photo(r.after) +
+
+        '<p>' +
+        r.history.map(esc).join('<br>') +
+        '</p>' +
+
+        '</div>'
+
+    ).join('') || 'No matching complaint.';
+
+};
+
+// ======================================
+// INITIAL RENDER
+// ======================================
+
+render();
+
+</script>
+
+</body>
+</html>
