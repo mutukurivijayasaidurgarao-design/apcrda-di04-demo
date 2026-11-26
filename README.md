@@ -5,3 +5,9 @@ An interactive web-based prototype demonstrating a digital grievance management 
 **Technologies:** HTML5, CSS3, JavaScript, Browser LocalStorage, Geolocation API.
 
 **Note:** This is a demonstration prototype, not a complete production application. Data is stored locally in the browser, and notifications are simulated. Backend integration, real authentication, OTP verification, and actual email/SMS notifications are not implemented.
+
+Open working_model.html in a modern browser.
+Demo flow: Public submit -> Main Office verify/correct/forward -> Department mark progress and upload after-photo -> Main Office verify/close -> appreciation message appears.
+This is a front-end prototype. Data is stored in browser localStorage. Authentication/OTP, real server/database, secure file storage and actual email/SMS delivery are not implemented. Do not enter real personal data.
+Production stack proposal: React, FastAPI, PostgreSQL, SQLAlchemy, Pydantic, JWT/OTP, Leaflet/OpenStreetMap, secure object storage, approved email/SMS gateway, Pytest.
+No AI/ML is used.
